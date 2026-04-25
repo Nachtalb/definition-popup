@@ -5,7 +5,7 @@ A small Chrome / Edge extension (Manifest V3). Highlight any word on a page and 
 ## Features
 
 - Trigger on any text selection (1–3 words, up to 60 characters).
-- Primary source: [freedictionaryapi.com](https://freedictionaryapi.com/) — IPA, part of speech, definitions, examples.
+- Primary source: [freedictionaryapi.com](https://freedictionaryapi.com/) — IPA, part of speech, definitions, examples. The "Open on Wiktionary" link in the popup uses the `source.url` returned by the API.
 - Fallback: scrapes [urbandictionary.com](https://www.urbandictionary.com/) for the top definitions, fetches live vote counts via the `/ui/votes` endpoint.
 - Popup automatically positions near the selection, flips above when there's no room below.
 - Click outside or press `Esc` to dismiss.

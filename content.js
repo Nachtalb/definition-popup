@@ -189,7 +189,10 @@
     }
 
     root.appendChild(body);
-    root.appendChild(footerLink(`https://freedictionaryapi.com/?word=${encodeURIComponent(data.word || word)}`, "Open on Free Dictionary"));
+    const sourceUrl = data.source && data.source.url
+      ? data.source.url
+      : `https://en.wiktionary.org/wiki/${encodeURIComponent(data.word || word)}`;
+    root.appendChild(footerLink(sourceUrl, "Open on Wiktionary"));
   }
 
   function renderUrban(word, defs) {
