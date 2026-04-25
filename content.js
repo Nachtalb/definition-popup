@@ -25,7 +25,16 @@
 
   // ---------- Event handlers ----------------------------------------------
 
-  function onMouseUp(_e) {
+  function onMouseUp(e) {
+    // Clicks on interactive elements inside our popups (close button, "Also on
+    // UD", "Back to dictionary", footer links) shouldn't be treated as a new
+    // selection — there's almost always a leftover selection on the page that
+    // would otherwise spawn a stacked popup on top of the action's result.
+    if (e.target instanceof Element) {
+      const interactive = e.target.closest("button, a");
+      if (interactive && isInsideAnyPopup(interactive)) return;
+    }
+
     // Defer slightly so the selection has settled.
     setTimeout(() => {
       const sel = window.getSelection();
