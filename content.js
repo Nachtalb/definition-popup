@@ -4,8 +4,11 @@
 
 (() => {
   const POPUP_ID = "__definition_popup_root__";
-  const MAX_PHRASE_LENGTH = 60;
-  const MAX_WORD_COUNT = 3;
+  const MAX_WORD_LENGTH = 50;
+  // A single word, optionally joined by separators (hyphen, apostrophe, period, underscore).
+  // Trailing separators (e.g. the final "." in "U.S.A.") are allowed.
+  // Examples: "aversion", "well-known", "state-of-the-art", "don't", "U.S.A."
+  const WORD_PATTERN = /^[\p{L}\p{M}\p{N}]+(?:[-'’._]+[\p{L}\p{M}\p{N}]*)*$/u;
 
   let popup = null;
   let lastQuery = "";
@@ -65,11 +68,11 @@
 
   function isLookupCandidate(text) {
     if (!text) return false;
-    if (text.length > MAX_PHRASE_LENGTH) return false;
-    const words = text.split(/\s+/);
-    if (words.length > MAX_WORD_COUNT) return false;
-    // Require at least one letter — skip pure punctuation/numbers.
-    if (!/[A-Za-z]/.test(text)) return false;
+    if (text.length > MAX_WORD_LENGTH) return false;
+    // Single word only (or words joined by hyphens/apostrophes/etc — no whitespace).
+    if (!WORD_PATTERN.test(text)) return false;
+    // Require at least one letter — skip pure numbers.
+    if (!/\p{L}/u.test(text)) return false;
     return true;
   }
 
