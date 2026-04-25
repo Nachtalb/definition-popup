@@ -7,22 +7,24 @@ const UD_VOTES = "https://www.urbandictionary.com/ui/votes?defids=";
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.action === "lookup" && typeof msg.word === "string") {
-    lookupWord(msg.word)
+    lookupWord(msg.word, { force: msg.force })
       .then(sendResponse)
       .catch((err) => sendResponse({ source: "error", error: String(err) }));
     return true; // keep channel open for async response
   }
 });
 
-async function lookupWord(rawWord) {
+async function lookupWord(rawWord, opts = {}) {
   const word = rawWord.trim();
   if (!word) return { source: "none" };
 
-  // 1. Try the standard dictionary first.
-  const dict = await tryDictionary(word);
-  if (dict) return { source: "dictionary", word, data: dict };
+  // 1. Try the standard dictionary first (skipped when force === "urban").
+  if (opts.force !== "urban") {
+    const dict = await tryDictionary(word);
+    if (dict) return { source: "dictionary", word, data: dict };
+  }
 
-  // 2. Fall back to Urban Dictionary (scrape page + fetch vote counts).
+  // 2. Urban Dictionary (scrape page + fetch vote counts).
   const urban = await tryUrbanDictionary(word);
   if (urban && urban.length > 0) {
     return { source: "urban", word, data: urban };

@@ -169,7 +169,7 @@
     root.appendChild(body);
   }
 
-  function renderDictionary(word, data) {
+  function renderDictionary(word, data, opts = {}) {
     const root = ensurePopup();
     root.innerHTML = "";
     root.appendChild(header(data.word || word, "Dictionary", "dp-badge-dict"));
@@ -203,19 +203,32 @@
     }
 
     root.appendChild(body);
+
     const sourceUrl = data.source && data.source.url
       ? data.source.url
       : `https://en.wiktionary.org/wiki/${encodeURIComponent(data.word || word)}`;
-    root.appendChild(footerLink(sourceUrl, "Open on Wiktionary"));
+    const footer = footerEl();
+    // Left side: action button to switch to Urban Dictionary.
+    const slangBtn = footerButton("Also on Urban Dictionary →", () => {
+      switchToUrban(word, data, opts.cachedUrban);
+    });
+    footer.appendChild(slangBtn);
+    // Right side: external link to the original source.
+    footer.appendChild(footerAnchor(sourceUrl, "Open on Wiktionary"));
+    root.appendChild(footer);
   }
 
-  function renderUrban(word, defs) {
+  function renderUrban(word, defs, opts = {}) {
     const root = ensurePopup();
     root.innerHTML = "";
     root.appendChild(header(defs[0]?.word || word, "Urban Dictionary", "dp-badge-urban"));
 
     const body = el("div", "dp-body");
-    body.appendChild(el("div", "dp-note", "No standard dictionary entry — showing slang results."));
+    if (opts.fromDictionary) {
+      body.appendChild(el("div", "dp-note", "Slang results from Urban Dictionary."));
+    } else {
+      body.appendChild(el("div", "dp-note", "No standard dictionary entry — showing slang results."));
+    }
 
     for (const d of defs.slice(0, 3)) {
       const block = el("div", "dp-entry dp-urban");
@@ -241,10 +254,56 @@
     }
 
     root.appendChild(body);
-    root.appendChild(footerLink(
+
+    const footer = footerEl();
+    if (opts.onBack) {
+      footer.appendChild(footerButton("← Back to dictionary", opts.onBack));
+    }
+    footer.appendChild(footerAnchor(
       `https://www.urbandictionary.com/define.php?term=${encodeURIComponent(defs[0]?.word || word)}`,
       "Open on Urban Dictionary"
     ));
+    root.appendChild(footer);
+  }
+
+  // Switch the popup from a dictionary view to the UD view for the same word.
+  // The dictionary data is captured so the user can come back to it instantly.
+  function switchToUrban(word, dictData, cachedUrban) {
+    const back = () => renderDictionary(word, dictData, { cachedUrban });
+
+    if (cachedUrban) {
+      renderUrban(word, cachedUrban, { onBack: back, fromDictionary: true });
+      return;
+    }
+
+    renderLoading(word);
+    const seq = ++requestSeq;
+    chrome.runtime.sendMessage({ action: "lookup", word, force: "urban" }, (response) => {
+      if (seq !== requestSeq) return;
+      if (chrome.runtime.lastError) {
+        renderError(word, chrome.runtime.lastError.message || "Lookup failed.");
+        return;
+      }
+      if (response && response.source === "urban") {
+        // Cache the UD response so subsequent dict→UD toggles are instant.
+        const backCached = () => renderDictionary(word, dictData, { cachedUrban: response.data });
+        renderUrban(word, response.data, { onBack: backCached, fromDictionary: true });
+      } else if (response && response.source === "error") {
+        renderError(word, response.error);
+      } else {
+        // Empty UD result: show a small message but keep the back button so the user
+        // can return to the dictionary view.
+        const root = ensurePopup();
+        root.innerHTML = "";
+        root.appendChild(header(word, "Urban Dictionary", "dp-badge-urban"));
+        const body = el("div", "dp-body");
+        body.appendChild(el("p", null, `No Urban Dictionary entries for “${word}”.`));
+        root.appendChild(body);
+        const footer = footerEl();
+        footer.appendChild(footerButton("← Back to dictionary", back));
+        root.appendChild(footer);
+      }
+    });
   }
 
   // ---------- Helpers ------------------------------------------------------
@@ -275,15 +334,31 @@
     return div;
   }
 
-  function footerLink(url, label) {
-    const f = el("div", "dp-footer");
+  function footerEl() {
+    return el("div", "dp-footer");
+  }
+
+  function footerAnchor(url, label) {
     const a = document.createElement("a");
+    a.className = "dp-footer-link";
     a.href = url;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
     a.textContent = label;
-    f.appendChild(a);
-    return f;
+    return a;
+  }
+
+  function footerButton(label, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dp-footer-btn";
+    b.textContent = label;
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
   }
 
   function el(tag, className, text) {
