@@ -91,6 +91,7 @@
 #__definition_popup_root__ .dp-body {
   padding: 12px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
 }
 

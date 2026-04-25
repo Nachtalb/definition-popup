@@ -73,6 +73,25 @@
     removePopup();
   }
 
+  // Wheel events over the popup never reach the page. If the body can scroll in
+  // the wheel direction we let the browser do its thing (just stop propagation);
+  // otherwise we preventDefault so the page underneath stays put — and the
+  // popup doesn't get closed by the resulting scroll.
+  function onPopupWheel(e) {
+    e.stopPropagation();
+    const body = popup && popup.querySelector(".dp-body");
+    if (!body) {
+      e.preventDefault();
+      return;
+    }
+    const dy = e.deltaY;
+    const canScrollDown = body.scrollTop + body.clientHeight < body.scrollHeight - 1;
+    const canScrollUp = body.scrollTop > 0;
+    if ((dy > 0 && !canScrollDown) || (dy < 0 && !canScrollUp) || dy === 0) {
+      e.preventDefault();
+    }
+  }
+
   function isLookupCandidate(text) {
     if (!text) return false;
     if (text.length > MAX_WORD_LENGTH) return false;
@@ -89,10 +108,12 @@
     popup.id = POPUP_ID;
     popup.className = "dp-popup";
     popup.addEventListener("mousedown", (e) => e.stopPropagation());
-    // Keep wheel/scroll inside the popup so it can't trigger the page scroll
-    // listener (which would otherwise close the popup).
-    popup.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+    // Keep scroll inside the popup so it can't trigger the page scroll listener
+    // (which would otherwise close the popup).
     popup.addEventListener("scroll", (e) => e.stopPropagation(), true);
+    // Eat wheel events: scroll the body if it can scroll in that direction,
+    // otherwise preventDefault so the page underneath doesn't scroll.
+    popup.addEventListener("wheel", onPopupWheel, { passive: false });
     document.body.appendChild(popup);
     return popup;
   }
