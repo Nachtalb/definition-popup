@@ -1,7 +1,7 @@
 /* Definition Popup styles. Scoped to #__definition_popup_root__ so we don't
    interfere with the host page's CSS. */
 
-#__definition_popup_root__.dp-popup {
+#__definition_popup_root__ .dp-popup {
   all: initial;
   position: absolute;
   z-index: 2147483647;
@@ -246,7 +246,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  #__definition_popup_root__.dp-popup {
+  #__definition_popup_root__ .dp-popup {
     background: #1f2328;
     border-color: #30363d;
     color: #e6edf3;

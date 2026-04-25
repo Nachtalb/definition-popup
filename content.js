@@ -1,29 +1,31 @@
 // Definition Popup — content script.
 // Watches for text selections, asks the background worker to look the word up,
-// and renders a small floating card next to the cursor.
+// and renders a small floating card next to the cursor. Selecting a word inside
+// an existing popup stacks a new popup on top of it; clicking anywhere outside
+// closes all popups at once.
 
 (() => {
-  const POPUP_ID = "__definition_popup_root__";
+  const ROOT_ID = "__definition_popup_root__";
   const MAX_WORD_LENGTH = 50;
   // A single word, optionally joined by separators (hyphen, apostrophe, period, underscore).
   // Trailing separators (e.g. the final "." in "U.S.A.") are allowed.
   // Examples: "aversion", "well-known", "state-of-the-art", "don't", "U.S.A."
   const WORD_PATTERN = /^[\p{L}\p{M}\p{N}]+(?:[-'’._]+[\p{L}\p{M}\p{N}]*)*$/u;
 
-  let popup = null;
-  let lastQuery = "";
-  let requestSeq = 0;
+  /** @type {HTMLDivElement[]} popups, oldest first */
+  let popups = [];
+  // Per-popup request counter — used to ignore stale background responses.
+  const popupSeqs = new WeakMap();
 
   document.addEventListener("mouseup", onMouseUp, true);
   document.addEventListener("mousedown", onMouseDown, true);
   document.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("scroll", onWindowScroll, true);
-  window.addEventListener("resize", removePopup, true);
+  window.addEventListener("resize", removeAllPopups, true);
 
-  function onMouseUp(e) {
-    // Don't react to clicks inside our own popup.
-    if (popup && popup.contains(e.target)) return;
+  // ---------- Event handlers ----------------------------------------------
 
+  function onMouseUp(_e) {
     // Defer slightly so the selection has settled.
     setTimeout(() => {
       const sel = window.getSelection();
@@ -35,51 +37,42 @@
       const rect = range.getBoundingClientRect();
       if (!rect || (rect.width === 0 && rect.height === 0)) return;
 
-      lastQuery = text;
-      const seq = ++requestSeq;
-      showPopupAt(rect, text);
-      renderLoading(text);
+      // If the selection sits inside an existing popup, stack a new one on top.
+      // Otherwise close any popups and start fresh.
+      const insidePopup = isInsideAnyPopup(sel.anchorNode);
+      if (!insidePopup) removeAllPopups();
 
-      chrome.runtime.sendMessage({ action: "lookup", word: text }, (response) => {
-        if (seq !== requestSeq) return; // a newer query has superseded this one
-        if (chrome.runtime.lastError) {
-          renderError(text, chrome.runtime.lastError.message || "Lookup failed.");
-          return;
-        }
-        if (!response) {
-          renderError(text, "No response from background script.");
-          return;
-        }
-        if (response.source === "dictionary") renderDictionary(response.word, response.data);
-        else if (response.source === "urban") renderUrban(response.word, response.data);
-        else if (response.source === "error") renderError(text, response.error);
-        else renderEmpty(text);
-      });
+      const popup = createPopup();
+      showPopupAt(popup, rect);
+      doLookup(popup, text);
     }, 10);
   }
 
   function onMouseDown(e) {
-    if (popup && !popup.contains(e.target)) removePopup();
+    // Click outside every popup → dismiss everything.
+    if (popups.length > 0 && !isInsideAnyPopup(e.target)) {
+      removeAllPopups();
+    }
   }
 
   function onKeyDown(e) {
-    if (e.key === "Escape") removePopup();
+    if (e.key === "Escape") removeAllPopups();
   }
 
   // Close on page/document scroll, but ignore scroll events that originate
-  // inside the popup (scrolling its own body, clicking its scrollbar, etc.).
+  // inside any popup (scrolling its body, clicking its scrollbar, etc.).
   function onWindowScroll(e) {
-    if (popup && e.target instanceof Node && popup.contains(e.target)) return;
-    removePopup();
+    if (e.target instanceof Node && isInsideAnyPopup(e.target)) return;
+    removeAllPopups();
   }
 
-  // Wheel events over the popup never reach the page. If the body can scroll in
-  // the wheel direction we let the browser do its thing (just stop propagation);
-  // otherwise we preventDefault so the page underneath stays put — and the
-  // popup doesn't get closed by the resulting scroll.
+  // Wheel events over a popup never reach the page. If that popup's body can
+  // scroll in the wheel direction we let the browser handle it (just stop
+  // propagation); otherwise we preventDefault so the page underneath stays put.
   function onPopupWheel(e) {
     e.stopPropagation();
-    const body = popup && popup.querySelector(".dp-body");
+    const popup = e.currentTarget;
+    const body = popup.querySelector(".dp-body");
     if (!body) {
       e.preventDefault();
       return;
@@ -92,34 +85,67 @@
     }
   }
 
+  // ---------- Popup lifecycle ---------------------------------------------
+
   function isLookupCandidate(text) {
     if (!text) return false;
     if (text.length > MAX_WORD_LENGTH) return false;
-    // Single word only (or words joined by hyphens/apostrophes/etc — no whitespace).
     if (!WORD_PATTERN.test(text)) return false;
-    // Require at least one letter — skip pure numbers.
     if (!/\p{L}/u.test(text)) return false;
     return true;
   }
 
-  function ensurePopup() {
-    if (popup && document.body.contains(popup)) return popup;
-    popup = document.createElement("div");
-    popup.id = POPUP_ID;
+  function ensureRoot() {
+    let root = document.getElementById(ROOT_ID);
+    if (!root) {
+      root = document.createElement("div");
+      root.id = ROOT_ID;
+      document.body.appendChild(root);
+    }
+    return root;
+  }
+
+  function createPopup() {
+    const root = ensureRoot();
+    const popup = document.createElement("div");
     popup.className = "dp-popup";
     popup.addEventListener("mousedown", (e) => e.stopPropagation());
-    // Keep scroll inside the popup so it can't trigger the page scroll listener
-    // (which would otherwise close the popup).
     popup.addEventListener("scroll", (e) => e.stopPropagation(), true);
-    // Eat wheel events: scroll the body if it can scroll in that direction,
-    // otherwise preventDefault so the page underneath doesn't scroll.
     popup.addEventListener("wheel", onPopupWheel, { passive: false });
-    document.body.appendChild(popup);
+    root.appendChild(popup);
+    popups.push(popup);
+    popupSeqs.set(popup, 0);
     return popup;
   }
 
-  function showPopupAt(rect, _word) {
-    ensurePopup();
+  function removePopup(popup) {
+    const i = popups.indexOf(popup);
+    if (i < 0) return;
+    popups.splice(i, 1);
+    if (popup.parentNode) popup.parentNode.removeChild(popup);
+    popupSeqs.delete(popup);
+  }
+
+  function removeAllPopups() {
+    while (popups.length) removePopup(popups[popups.length - 1]);
+  }
+
+  function isInsideAnyPopup(node) {
+    if (!(node instanceof Node)) return false;
+    return popups.some((p) => p === node || p.contains(node));
+  }
+
+  function nextSeq(popup) {
+    const next = (popupSeqs.get(popup) || 0) + 1;
+    popupSeqs.set(popup, next);
+    return next;
+  }
+
+  function isAlive(popup, seq) {
+    return popups.includes(popup) && popupSeqs.get(popup) === seq;
+  }
+
+  function showPopupAt(popup, rect) {
     // Position below the selection by default; flip above if it would overflow.
     const margin = 8;
     const popupWidth = 360;
@@ -145,15 +171,67 @@
     popup.style.maxHeight = `${popupMaxHeight}px`;
   }
 
-  function removePopup() {
-    if (popup && popup.parentNode) popup.parentNode.removeChild(popup);
-    popup = null;
-    requestSeq++;
+  // ---------- Lookups -----------------------------------------------------
+
+  function doLookup(popup, word) {
+    renderLoading(popup, word);
+    const seq = nextSeq(popup);
+    chrome.runtime.sendMessage({ action: "lookup", word }, (response) => {
+      if (!isAlive(popup, seq)) return;
+      if (chrome.runtime.lastError) {
+        renderError(popup, word, chrome.runtime.lastError.message || "Lookup failed.");
+        return;
+      }
+      if (!response) {
+        renderError(popup, word, "No response from background script.");
+        return;
+      }
+      if (response.source === "dictionary") renderDictionary(popup, response.word, response.data);
+      else if (response.source === "urban") renderUrban(popup, response.word, response.data);
+      else if (response.source === "error") renderError(popup, word, response.error);
+      else renderEmpty(popup, word);
+    });
+  }
+
+  // Switch a popup from a dictionary view to its UD view for the same word.
+  function switchToUrban(popup, word, dictData, cachedUrban) {
+    const back = () => renderDictionary(popup, word, dictData, { cachedUrban });
+
+    if (cachedUrban) {
+      renderUrban(popup, word, cachedUrban, { onBack: back, fromDictionary: true });
+      return;
+    }
+
+    renderLoading(popup, word);
+    const seq = nextSeq(popup);
+    chrome.runtime.sendMessage({ action: "lookup", word, force: "urban" }, (response) => {
+      if (!isAlive(popup, seq)) return;
+      if (chrome.runtime.lastError) {
+        renderError(popup, word, chrome.runtime.lastError.message || "Lookup failed.");
+        return;
+      }
+      if (response && response.source === "urban") {
+        const backCached = () => renderDictionary(popup, word, dictData, { cachedUrban: response.data });
+        renderUrban(popup, word, response.data, { onBack: backCached, fromDictionary: true });
+      } else if (response && response.source === "error") {
+        renderError(popup, word, response.error);
+      } else {
+        // Empty UD result — keep the back button so the user can return.
+        popup.innerHTML = "";
+        popup.appendChild(header(popup, word, "Urban Dictionary", "dp-badge-urban"));
+        const body = el("div", "dp-body");
+        body.appendChild(el("p", null, `No Urban Dictionary entries for “${word}”.`));
+        popup.appendChild(body);
+        const footer = footerEl();
+        footer.appendChild(footerButton("← Back to dictionary", back));
+        popup.appendChild(footer);
+      }
+    });
   }
 
   // ---------- Renderers ---------------------------------------------------
 
-  function header(word, sourceLabel, sourceClass) {
+  function header(popup, word, sourceLabel, sourceClass) {
     const div = el("div", "dp-header");
     div.appendChild(el("div", "dp-word", word));
     if (sourceLabel) {
@@ -162,38 +240,34 @@
     }
     const close = el("button", "dp-close", "×");
     close.title = "Close";
-    close.addEventListener("click", removePopup);
+    close.addEventListener("click", () => removePopup(popup));
     div.appendChild(close);
     return div;
   }
 
-  function renderLoading(word) {
-    const root = ensurePopup();
-    root.innerHTML = "";
-    root.appendChild(header(word, "Looking up…", "dp-badge-loading"));
-    root.appendChild(el("div", "dp-body dp-loading", "Searching dictionary…"));
+  function renderLoading(popup, word) {
+    popup.innerHTML = "";
+    popup.appendChild(header(popup, word, "Looking up…", "dp-badge-loading"));
+    popup.appendChild(el("div", "dp-body dp-loading", "Searching dictionary…"));
   }
 
-  function renderError(word, message) {
-    const root = ensurePopup();
-    root.innerHTML = "";
-    root.appendChild(header(word, "Error", "dp-badge-error"));
-    root.appendChild(el("div", "dp-body", message));
+  function renderError(popup, word, message) {
+    popup.innerHTML = "";
+    popup.appendChild(header(popup, word, "Error", "dp-badge-error"));
+    popup.appendChild(el("div", "dp-body", message));
   }
 
-  function renderEmpty(word) {
-    const root = ensurePopup();
-    root.innerHTML = "";
-    root.appendChild(header(word, "Not found", "dp-badge-error"));
+  function renderEmpty(popup, word) {
+    popup.innerHTML = "";
+    popup.appendChild(header(popup, word, "Not found", "dp-badge-error"));
     const body = el("div", "dp-body");
     body.appendChild(el("p", null, `No entry found for “${word}” in the dictionary or on Urban Dictionary.`));
-    root.appendChild(body);
+    popup.appendChild(body);
   }
 
-  function renderDictionary(word, data, opts = {}) {
-    const root = ensurePopup();
-    root.innerHTML = "";
-    root.appendChild(header(data.word || word, "Dictionary", "dp-badge-dict"));
+  function renderDictionary(popup, word, data, opts = {}) {
+    popup.innerHTML = "";
+    popup.appendChild(header(popup, data.word || word, "Dictionary", "dp-badge-dict"));
 
     const body = el("div", "dp-body");
 
@@ -223,26 +297,23 @@
       body.appendChild(block);
     }
 
-    root.appendChild(body);
+    popup.appendChild(body);
 
     const sourceUrl = data.source && data.source.url
       ? data.source.url
       : `https://en.wiktionary.org/wiki/${encodeURIComponent(data.word || word)}`;
     const footer = footerEl();
-    // Left side: action button to switch to Urban Dictionary.
     const slangBtn = footerButton("Also on Urban Dictionary →", () => {
-      switchToUrban(word, data, opts.cachedUrban);
+      switchToUrban(popup, word, data, opts.cachedUrban);
     });
     footer.appendChild(slangBtn);
-    // Right side: external link to the original source.
     footer.appendChild(footerAnchor(sourceUrl, "Open on Wiktionary"));
-    root.appendChild(footer);
+    popup.appendChild(footer);
   }
 
-  function renderUrban(word, defs, opts = {}) {
-    const root = ensurePopup();
-    root.innerHTML = "";
-    root.appendChild(header(defs[0]?.word || word, "Urban Dictionary", "dp-badge-urban"));
+  function renderUrban(popup, word, defs, opts = {}) {
+    popup.innerHTML = "";
+    popup.appendChild(header(popup, defs[0]?.word || word, "Urban Dictionary", "dp-badge-urban"));
 
     const body = el("div", "dp-body");
     if (opts.fromDictionary) {
@@ -274,7 +345,7 @@
       body.appendChild(block);
     }
 
-    root.appendChild(body);
+    popup.appendChild(body);
 
     const footer = footerEl();
     if (opts.onBack) {
@@ -284,47 +355,7 @@
       `https://www.urbandictionary.com/define.php?term=${encodeURIComponent(defs[0]?.word || word)}`,
       "Open on Urban Dictionary"
     ));
-    root.appendChild(footer);
-  }
-
-  // Switch the popup from a dictionary view to the UD view for the same word.
-  // The dictionary data is captured so the user can come back to it instantly.
-  function switchToUrban(word, dictData, cachedUrban) {
-    const back = () => renderDictionary(word, dictData, { cachedUrban });
-
-    if (cachedUrban) {
-      renderUrban(word, cachedUrban, { onBack: back, fromDictionary: true });
-      return;
-    }
-
-    renderLoading(word);
-    const seq = ++requestSeq;
-    chrome.runtime.sendMessage({ action: "lookup", word, force: "urban" }, (response) => {
-      if (seq !== requestSeq) return;
-      if (chrome.runtime.lastError) {
-        renderError(word, chrome.runtime.lastError.message || "Lookup failed.");
-        return;
-      }
-      if (response && response.source === "urban") {
-        // Cache the UD response so subsequent dict→UD toggles are instant.
-        const backCached = () => renderDictionary(word, dictData, { cachedUrban: response.data });
-        renderUrban(word, response.data, { onBack: backCached, fromDictionary: true });
-      } else if (response && response.source === "error") {
-        renderError(word, response.error);
-      } else {
-        // Empty UD result: show a small message but keep the back button so the user
-        // can return to the dictionary view.
-        const root = ensurePopup();
-        root.innerHTML = "";
-        root.appendChild(header(word, "Urban Dictionary", "dp-badge-urban"));
-        const body = el("div", "dp-body");
-        body.appendChild(el("p", null, `No Urban Dictionary entries for “${word}”.`));
-        root.appendChild(body);
-        const footer = footerEl();
-        footer.appendChild(footerButton("← Back to dictionary", back));
-        root.appendChild(footer);
-      }
-    });
+    popup.appendChild(footer);
   }
 
   // ---------- Helpers ------------------------------------------------------
