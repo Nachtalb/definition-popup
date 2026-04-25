@@ -3,7 +3,8 @@
   "name": "Definition Popup",
   "version": "1.0.0",
   "description": "Highlight any word on a page to see its dictionary definition. Falls back to Urban Dictionary when no standard entry exists.",
-  "permissions": ["storage"],
+  "author": "Nachtalb",
+  "homepage_url": "https://github.com/Nachtalb/definition-popup",
   "host_permissions": [
     "https://freedictionaryapi.com/*",
     "https://www.urbandictionary.com/*"
