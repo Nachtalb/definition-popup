@@ -1,0 +1,15 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
+
+# Build output / packaged extension
+*.zip
+*.crx
+*.pem
+dist/
+build/
+node_modules/

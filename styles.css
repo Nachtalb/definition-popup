@@ -1,0 +1,287 @@
+/* Definition Popup styles. Scoped to #__definition_popup_root__ so we don't
+   interfere with the host page's CSS. */
+
+#__definition_popup_root__.dp-popup {
+  all: initial;
+  position: absolute;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #1f2328;
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#__definition_popup_root__ * {
+  box-sizing: border-box;
+}
+
+#__definition_popup_root__ .dp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eaeef2;
+  background: #f6f8fa;
+}
+
+#__definition_popup_root__ .dp-word {
+  font-weight: 700;
+  font-size: 16px;
+  color: #0969da;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#__definition_popup_root__ .dp-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ddf4ff;
+  color: #0969da;
+  text-transform: uppercase;
+}
+
+#__definition_popup_root__ .dp-badge-urban {
+  background: #fff3cd;
+  color: #8a6d00;
+}
+
+#__definition_popup_root__ .dp-badge-error {
+  background: #ffebe9;
+  color: #cf222e;
+}
+
+#__definition_popup_root__ .dp-badge-loading {
+  background: #eaeef2;
+  color: #57606a;
+}
+
+#__definition_popup_root__ .dp-close {
+  all: unset;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #57606a;
+  border-radius: 4px;
+}
+
+#__definition_popup_root__ .dp-close:hover {
+  background: #eaeef2;
+  color: #1f2328;
+}
+
+#__definition_popup_root__ .dp-body {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#__definition_popup_root__ .dp-loading {
+  color: #57606a;
+  font-style: italic;
+}
+
+#__definition_popup_root__ .dp-phonetic {
+  font-family: "Charter", "Iowan Old Style", "Times New Roman", serif;
+  color: #57606a;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+#__definition_popup_root__ .dp-entry {
+  margin-bottom: 10px;
+}
+
+#__definition_popup_root__ .dp-entry:last-child {
+  margin-bottom: 0;
+}
+
+#__definition_popup_root__ .dp-pos {
+  font-style: italic;
+  font-weight: 600;
+  color: #6639ba;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+#__definition_popup_root__ .dp-senses {
+  margin: 0;
+  padding-left: 20px;
+}
+
+#__definition_popup_root__ .dp-sense {
+  margin-bottom: 6px;
+}
+
+#__definition_popup_root__ .dp-def {
+  display: block;
+  color: #1f2328;
+}
+
+#__definition_popup_root__ .dp-example {
+  display: block;
+  margin-top: 4px;
+  color: #57606a;
+  font-style: italic;
+  font-size: 13px;
+}
+
+#__definition_popup_root__ .dp-urban .dp-def {
+  white-space: pre-wrap;
+}
+
+#__definition_popup_root__ .dp-urban .dp-example {
+  white-space: pre-wrap;
+  border-left: 2px solid #d0d7de;
+  padding-left: 8px;
+  margin-top: 6px;
+}
+
+#__definition_popup_root__ .dp-urban + .dp-urban {
+  border-top: 1px dashed #eaeef2;
+  padding-top: 10px;
+}
+
+#__definition_popup_root__ .dp-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #57606a;
+}
+
+#__definition_popup_root__ .dp-votes {
+  display: inline-flex;
+  gap: 8px;
+  font-weight: 600;
+}
+
+#__definition_popup_root__ .dp-up {
+  color: #1a7f37;
+}
+
+#__definition_popup_root__ .dp-down {
+  color: #cf222e;
+}
+
+#__definition_popup_root__ .dp-contrib {
+  color: #57606a;
+  text-align: right;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#__definition_popup_root__ .dp-note {
+  background: #fff8e1;
+  border: 1px solid #f0d36a;
+  color: #6b5400;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+#__definition_popup_root__ .dp-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #eaeef2;
+  background: #f6f8fa;
+  font-size: 12px;
+  text-align: right;
+}
+
+#__definition_popup_root__ .dp-footer a {
+  color: #0969da;
+  text-decoration: none;
+}
+
+#__definition_popup_root__ .dp-footer a:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+  #__definition_popup_root__.dp-popup {
+    background: #1f2328;
+    border-color: #30363d;
+    color: #e6edf3;
+  }
+  #__definition_popup_root__ .dp-header,
+  #__definition_popup_root__ .dp-footer {
+    background: #161b22;
+    border-color: #30363d;
+  }
+  #__definition_popup_root__ .dp-word {
+    color: #79c0ff;
+  }
+  #__definition_popup_root__ .dp-badge {
+    background: #0d3a66;
+    color: #cae8ff;
+  }
+  #__definition_popup_root__ .dp-badge-urban {
+    background: #5a4500;
+    color: #ffe7a0;
+  }
+  #__definition_popup_root__ .dp-badge-error {
+    background: #5a1d22;
+    color: #ffd7d5;
+  }
+  #__definition_popup_root__ .dp-badge-loading {
+    background: #30363d;
+    color: #adbac7;
+  }
+  #__definition_popup_root__ .dp-pos {
+    color: #d2a8ff;
+  }
+  #__definition_popup_root__ .dp-def {
+    color: #e6edf3;
+  }
+  #__definition_popup_root__ .dp-example,
+  #__definition_popup_root__ .dp-phonetic,
+  #__definition_popup_root__ .dp-meta,
+  #__definition_popup_root__ .dp-contrib {
+    color: #adbac7;
+  }
+  #__definition_popup_root__ .dp-up {
+    color: #7ee787;
+  }
+  #__definition_popup_root__ .dp-down {
+    color: #ff7b72;
+  }
+  #__definition_popup_root__ .dp-note {
+    background: #3a2d00;
+    border-color: #6b5400;
+    color: #ffe7a0;
+  }
+  #__definition_popup_root__ .dp-urban + .dp-urban,
+  #__definition_popup_root__ .dp-urban .dp-example {
+    border-color: #30363d;
+  }
+  #__definition_popup_root__ .dp-close:hover {
+    background: #30363d;
+    color: #e6edf3;
+  }
+  #__definition_popup_root__ .dp-footer a {
+    color: #79c0ff;
+  }
+}
