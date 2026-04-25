@@ -17,7 +17,7 @@
   document.addEventListener("mouseup", onMouseUp, true);
   document.addEventListener("mousedown", onMouseDown, true);
   document.addEventListener("keydown", onKeyDown, true);
-  window.addEventListener("scroll", removePopup, true);
+  window.addEventListener("scroll", onWindowScroll, true);
   window.addEventListener("resize", removePopup, true);
 
   function onMouseUp(e) {
@@ -66,6 +66,13 @@
     if (e.key === "Escape") removePopup();
   }
 
+  // Close on page/document scroll, but ignore scroll events that originate
+  // inside the popup (scrolling its own body, clicking its scrollbar, etc.).
+  function onWindowScroll(e) {
+    if (popup && e.target instanceof Node && popup.contains(e.target)) return;
+    removePopup();
+  }
+
   function isLookupCandidate(text) {
     if (!text) return false;
     if (text.length > MAX_WORD_LENGTH) return false;
@@ -82,6 +89,10 @@
     popup.id = POPUP_ID;
     popup.className = "dp-popup";
     popup.addEventListener("mousedown", (e) => e.stopPropagation());
+    // Keep wheel/scroll inside the popup so it can't trigger the page scroll
+    // listener (which would otherwise close the popup).
+    popup.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+    popup.addEventListener("scroll", (e) => e.stopPropagation(), true);
     document.body.appendChild(popup);
     return popup;
   }
