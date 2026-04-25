@@ -5,6 +5,33 @@ const DICT_ENDPOINT = "https://freedictionaryapi.com/api/v1/entries/en/";
 const UD_PAGE = "https://www.urbandictionary.com/define.php?term=";
 const UD_VOTES = "https://www.urbandictionary.com/ui/votes?defids=";
 
+// Simple in-memory LRU. Persists for the life of the service worker (Chrome may
+// terminate it after ~30 s of inactivity, which is fine — worst case is a re-fetch).
+const CACHE_LIMIT = 10;
+const cache = new Map(); // insertion-ordered: oldest first
+
+function cacheKey(word, force) {
+  return `${(force || "auto")}::${word.toLowerCase()}`;
+}
+
+function cacheGet(key) {
+  if (!cache.has(key)) return null;
+  const value = cache.get(key);
+  // Bump to "most recently used" by reinserting.
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
+function cacheSet(key, value) {
+  if (cache.has(key)) cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.action === "lookup" && typeof msg.word === "string") {
     lookupWord(msg.word, { force: msg.force })
@@ -18,19 +45,31 @@ async function lookupWord(rawWord, opts = {}) {
   const word = rawWord.trim();
   if (!word) return { source: "none" };
 
+  const key = cacheKey(word, opts.force);
+  const cached = cacheGet(key);
+  if (cached) return { ...cached, cached: true };
+
   // 1. Try the standard dictionary first (skipped when force === "urban").
   if (opts.force !== "urban") {
     const dict = await tryDictionary(word);
-    if (dict) return { source: "dictionary", word, data: dict };
+    if (dict) {
+      const resp = { source: "dictionary", word, data: dict };
+      cacheSet(key, resp);
+      return resp;
+    }
   }
 
   // 2. Urban Dictionary (scrape page + fetch vote counts).
   const urban = await tryUrbanDictionary(word);
   if (urban && urban.length > 0) {
-    return { source: "urban", word, data: urban };
+    const resp = { source: "urban", word, data: urban };
+    cacheSet(key, resp);
+    return resp;
   }
 
-  return { source: "none", word };
+  const empty = { source: "none", word };
+  cacheSet(key, empty);
+  return empty;
 }
 
 async function tryDictionary(word) {
